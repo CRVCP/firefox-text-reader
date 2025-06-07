@@ -1,17 +1,18 @@
 {
   "manifest_version": 2,
   "name": "Read Selected Text Aloud",
-  "version": "1.0",
-  "description": "Reads the highlighted text using speech synthesis.",
-  "permissions": ["contextMenus", "activeTab"],
+  "version": "1.1",
+  "description": "Reads selected text using a voice you choose.",
+  "permissions": ["contextMenus", "activeTab", "storage"],
   "background": {
     "scripts": ["background.js"]
   },
   "browser_action": {
-    "default_title": "Read Text Aloud"
+    "default_popup": "popup.html",
+    "default_icon": "icons/logo.png"
   },
   "icons": {
-    "48": "icons/icon.png"
+    "48": "icons/logo.png"
   },
   "applications": {
     "gecko": {
@@ -20,3 +21,4 @@
     }
   }
 }
+
