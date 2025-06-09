@@ -4,6 +4,24 @@ browser.contextMenus.create({
   contexts: ["selection"]
 });
 
+// Global variable to track if we have an active global escape handler
+let globalEscapeHandlerActive = false;
+
+// Global escape handler function that will be used across all instances
+function globalEscapeHandler(e) {
+  if (e.key === 'Escape') {
+    console.log('Global escape handler triggered');
+    speechSynthesis.cancel();
+    
+    // Reset the speech synthesis state completely
+    window.speechSynthesis = window.speechSynthesis;
+    
+    // Remove the global handler
+    document.removeEventListener('keydown', globalEscapeHandler);
+    globalEscapeHandlerActive = false;
+  }
+}
+
 browser.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "readText") {
     browser.storage.local.get('selectedVoice').then(data => {
@@ -15,19 +33,11 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
           
           const text = window.getSelection().toString();
           if (text) {
-            const utterance = new SpeechSynthesisUtterance(text);
-            
-            // Clean up any existing speech and event listeners
+            // First, ensure any existing speech is canceled and cleaned up
             speechSynthesis.cancel();
             
-            // Remove any existing escape key listeners
-            const escKeyHandler = function(e) {
-              if (e.key === 'Escape') {
-                speechSynthesis.cancel();
-                // Remove the event listener when escape is pressed
-                document.removeEventListener('keydown', escKeyHandler);
-              }
-            };
+            // Create a new utterance
+            const utterance = new SpeechSynthesisUtterance(text);
             
             // Set up the voice and speak
             const setVoice = () => {
@@ -46,17 +56,30 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
               
               // Add event listeners for speech events
               utterance.onend = function() {
-                // Clean up when speech ends naturally
-                document.removeEventListener('keydown', escKeyHandler);
+                console.log('Speech ended naturally');
+                // Remove global escape handler if it exists
+                if (globalEscapeHandlerActive) {
+                  document.removeEventListener('keydown', globalEscapeHandler);
+                  globalEscapeHandlerActive = false;
+                }
               };
               
-              utterance.onerror = function() {
-                // Clean up on error
-                document.removeEventListener('keydown', escKeyHandler);
+              utterance.onerror = function(event) {
+                console.log('Speech error:', event.error);
+                // Remove global escape handler if it exists
+                if (globalEscapeHandlerActive) {
+                  document.removeEventListener('keydown', globalEscapeHandler);
+                  globalEscapeHandlerActive = false;
+                }
               };
               
-              // Add the escape key handler
-              document.addEventListener('keydown', escKeyHandler);
+              // Set up global escape handler if not already active
+              if (!globalEscapeHandlerActive) {
+                document.removeEventListener('keydown', globalEscapeHandler); // Remove any existing handler just in case
+                document.addEventListener('keydown', globalEscapeHandler);
+                globalEscapeHandlerActive = true;
+                console.log('Global escape handler added');
+              }
               
               // Start speaking
               speechSynthesis.speak(utterance);
