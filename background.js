@@ -4,46 +4,40 @@ browser.contextMenus.create({
   contexts: ["selection"]
 });
 
-// Global variable to track if we have an active global escape handler
-let globalEscapeHandlerActive = false;
-
-// Global escape handler function that will be used across all instances
-function globalEscapeHandler(e) {
-  if (e.key === 'Escape') {
-    console.log('Global escape handler triggered');
-    speechSynthesis.cancel();
-    
-    // Reset the speech synthesis state completely
-    window.speechSynthesis = window.speechSynthesis;
-    
-    // Remove the global handler
-    document.removeEventListener('keydown', globalEscapeHandler);
-    globalEscapeHandlerActive = false;
-  }
-}
-
 browser.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "readText") {
     browser.storage.local.get('selectedVoice').then(data => {
       const voiceName = data.selectedVoice || '';
       browser.tabs.executeScript({
         code: `
-          // Store the voice name safely
-          const storedVoiceName = ${JSON.stringify(voiceName)};
-          
-          const text = window.getSelection().toString();
-          if (text) {
-            // First, ensure any existing speech is canceled and cleaned up
+          (function() {
+            // Store the voice name safely
+            const storedVoiceName = ${JSON.stringify(voiceName)};
+            
+            const text = window.getSelection().toString();
+            if (!text) return;
+            
+            // First, ensure any existing speech is canceled
             speechSynthesis.cancel();
             
             // Create a new utterance
             const utterance = new SpeechSynthesisUtterance(text);
             
-            // Set up the voice and speak
-            const setVoice = () => {
+            // Create a function to handle the escape key
+            const handleEscapeKey = function(e) {
+              if (e.key === 'Escape') {
+                console.log('Escape key pressed, canceling speech');
+                speechSynthesis.cancel();
+                // Clean up the event listener
+                document.removeEventListener('keydown', handleEscapeKey);
+              }
+            };
+            
+            // Function to set up the voice and start speaking
+            const setupAndSpeak = () => {
               const voices = speechSynthesis.getVoices();
               
-              // Only try to set voice if we have a stored voice name
+              // Try to set the selected voice
               if (storedVoiceName) {
                 const selected = voices.find(v => v.name === storedVoiceName);
                 if (selected) {
@@ -54,47 +48,36 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
                 }
               }
               
-              // Add event listeners for speech events
+              // Add cleanup for when speech ends or errors
               utterance.onend = function() {
                 console.log('Speech ended naturally');
-                // Remove global escape handler if it exists
-                if (globalEscapeHandlerActive) {
-                  document.removeEventListener('keydown', globalEscapeHandler);
-                  globalEscapeHandlerActive = false;
-                }
+                document.removeEventListener('keydown', handleEscapeKey);
               };
               
               utterance.onerror = function(event) {
                 console.log('Speech error:', event.error);
-                // Remove global escape handler if it exists
-                if (globalEscapeHandlerActive) {
-                  document.removeEventListener('keydown', globalEscapeHandler);
-                  globalEscapeHandlerActive = false;
-                }
+                document.removeEventListener('keydown', handleEscapeKey);
               };
               
-              // Set up global escape handler if not already active
-              if (!globalEscapeHandlerActive) {
-                document.removeEventListener('keydown', globalEscapeHandler); // Remove any existing handler just in case
-                document.addEventListener('keydown', globalEscapeHandler);
-                globalEscapeHandlerActive = true;
-                console.log('Global escape handler added');
-              }
+              // Add the escape key handler
+              document.removeEventListener('keydown', handleEscapeKey); // Remove any existing handler just in case
+              document.addEventListener('keydown', handleEscapeKey);
               
               // Start speaking
               speechSynthesis.speak(utterance);
             };
             
+            // Check if voices are available or need to wait
             if (speechSynthesis.getVoices().length === 0) {
               speechSynthesis.onvoiceschanged = function() {
-                setVoice();
+                setupAndSpeak();
                 // Only run once
                 speechSynthesis.onvoiceschanged = null;
               };
             } else {
-              setVoice();
+              setupAndSpeak();
             }
-          }
+          })(); // Immediately invoke the function to avoid polluting global scope
         `
       });
     });
