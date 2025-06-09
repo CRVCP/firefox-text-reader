@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Read Selected Text Aloud",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Reads selected text using a voice you choose.",
   "permissions": ["contextMenus", "activeTab", "storage"],
   "background": {
